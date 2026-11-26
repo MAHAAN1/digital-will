@@ -2,18 +2,17 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { api, getAuthToken } from '@/lib/api';
-import { DocumentResponse, UIState, WillResponse } from '@/lib/types';
+import { api } from '@/lib/api';
+import { DocumentResponse, UIState } from '@/lib/types';
 import { formatBytes, formatDate, mapErrorToUIState } from '@/lib/utils';
 import { Lock, Upload, Download, CheckCircle2, AlertCircle, FileText, Shield, RotateCcw, ArrowRight } from 'lucide-react';
 
 export default function DocumentsPage() {
-  const [will, setWill] = useState<WillResponse | null>(null);
   const [willId, setWillId] = useState('');
   const [documents, setDocuments] = useState<DocumentResponse[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const [uiState, setUiState] = useState<UIState>('idle');
+  const [uiState, setUiState] = useState<UIState>('loading');
   const [uploadState, setUploadState] = useState<UIState>('idle');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -34,29 +33,26 @@ export default function DocumentsPage() {
     }
   }, []);
 
-  const loadInitial = useCallback(async () => {
-    const token = getAuthToken();
-    if (!token) {
-      setUiState('unauthorized');
-      return;
-    }
-
-    try {
-      const myWill = await api.getMyWill();
-      if (myWill) {
-        setWill(myWill);
-        setWillId(myWill.id);
-        await loadDocuments(myWill.id);
+  const loadInitial = useCallback((active: () => boolean = () => true) =>
+    api.getMyWill().then(async myWill => {
+      if (!active()) return;
+      if (!myWill) {
+        setUiState('not_found');
+        return;
       }
-    } catch (err: unknown) {
+      setWillId(myWill.id);
+      await loadDocuments(myWill.id);
+    }).catch(err => {
+      if (!active()) return;
       const { state, message } = mapErrorToUIState(err);
       setUiState(state);
       setErrorMessage(message);
-    }
-  }, [loadDocuments]);
+    }), [loadDocuments]);
 
   useEffect(() => {
-    loadInitial();
+    let active = true;
+    void loadInitial(() => active);
+    return () => { active = false; };
   }, [loadInitial]);
 
   const handleUpload = async (e: React.FormEvent) => {

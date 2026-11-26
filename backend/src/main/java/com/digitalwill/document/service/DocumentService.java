@@ -85,10 +85,8 @@ public class DocumentService {
         // 2. Perform envelope encryption (AES-256-GCM + wrapped DEK)
         EncryptedData encrypted = encryptionService.encrypt(plaintext);
 
-        // 3. Store ciphertext securely on storage backend
-        String storagePath = storageService.store(willId, documentId, encrypted.ciphertext());
+        String storagePath = storageService.referenceFor(willId, documentId);
 
-        // 4. Save metadata entity
         EncryptedDocument entity = new EncryptedDocument(
                 documentId,
                 willId,
@@ -106,7 +104,8 @@ public class DocumentService {
                 ownerId
         );
 
-        EncryptedDocument saved = documentRepository.save(entity);
+        EncryptedDocument saved = documentRepository.saveAndFlush(entity);
+        storageService.store(willId, documentId, encrypted.ciphertext());
 
         // 5. Audit log upload event (audit-required)
         String details = "{\"fileName\":\"" + fileName + "\",\"fileSize\":" + plaintext.length + ",\"checksum\":\"" + checksum + "\"}";

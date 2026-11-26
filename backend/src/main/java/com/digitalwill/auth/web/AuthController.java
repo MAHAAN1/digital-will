@@ -1,6 +1,7 @@
 package com.digitalwill.auth.web;
 
 import com.digitalwill.auth.security.UserPrincipal;
+import com.digitalwill.auth.security.SessionCredentials;
 import com.digitalwill.auth.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -8,10 +9,13 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
+import java.util.UUID;
 import java.util.Map;
 import java.util.Objects;
 
@@ -28,6 +32,7 @@ public class AuthController {
     public record RegisterRequest(
             @NotBlank(message = "Email must not be blank")
             @Email(message = "Email must be valid")
+            @Size(max = 255)
             String email,
 
             @NotBlank(message = "Password must not be blank")
@@ -35,6 +40,7 @@ public class AuthController {
             String password,
 
             @NotBlank(message = "Full name must not be blank")
+            @Size(max = 255)
             String fullName
     ) {}
 
@@ -47,15 +53,31 @@ public class AuthController {
     ) {}
 
     @PostMapping("/register")
-    public ResponseEntity<AuthService.AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
         AuthService.AuthResponse response = authService.register(request.email(), request.password(), request.fullName());
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return sessionResponse(HttpStatus.CREATED, response, httpRequest);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthService.AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         AuthService.AuthResponse response = authService.login(request.email(), request.password());
-        return ResponseEntity.ok(response);
+        return sessionResponse(HttpStatus.OK, response, httpRequest);
+    }
+
+    private record BrowserProfile(UUID userId, String email, String fullName, UUID willId) {}
+
+    private ResponseEntity<?> sessionResponse(HttpStatus status, AuthService.AuthResponse session,
+                                             HttpServletRequest request) {
+        var response = ResponseEntity.status(status);
+        if (!SessionCredentials.browserRequest(request)) return response.body(session);
+        return response.header(HttpHeaders.SET_COOKIE, SessionCredentials.cookie(session.token(), SessionCredentials.LIFETIME).toString())
+                .body(new BrowserProfile(session.userId(), session.email(), session.fullName(), session.willId()));
+    }
+
+    @GetMapping("/session")
+    public ResponseEntity<AuthService.UserProfile> session(@AuthenticationPrincipal UserPrincipal principal) {
+        if (principal == null) return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(authService.getProfile(principal.getId()));
     }
 
     @GetMapping("/me")
@@ -69,10 +91,11 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<Map<String, String>> logout(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            authService.logout(authHeader.substring(7));
+        authService.logout(SessionCredentials.from(request));
+        var response = ResponseEntity.ok();
+        if (SessionCredentials.browserRequest(request)) {
+            response.header(HttpHeaders.SET_COOKIE, SessionCredentials.cookie("", Duration.ZERO).toString());
         }
-        return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
+        return response.body(Map.of("message", "Logged out successfully"));
     }
 }

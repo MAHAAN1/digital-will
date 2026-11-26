@@ -45,6 +45,7 @@ import java.util.UUID;
  */
 @Service
 public class ReleaseExecutionService {
+    private static final tools.jackson.databind.ObjectMapper JSON = new tools.jackson.databind.ObjectMapper();
 
     private static final Logger log = LoggerFactory.getLogger(ReleaseExecutionService.class);
     private static final Duration DEFAULT_DISCLOSURE_TOKEN_TTL = Duration.ofDays(30);
@@ -241,19 +242,19 @@ public class ReleaseExecutionService {
     private void processBeneficiaryDisclosure(UUID willId, Beneficiary beneficiary, Instant now) {
         // Collect allocated assets for this beneficiary
         List<AssetAllocation> allocations = allocationRepository.findByBeneficiaryId(beneficiary.getId());
-        List<String> assetSummaries = new ArrayList<>();
+        var assetSummaries = new ArrayList<java.util.Map<String, Object>>();
 
         for (AssetAllocation alloc : allocations) {
             assetRepository.findById(alloc.getAssetId()).ifPresent(asset -> {
-                String summary = "{\"assetId\":\"" + asset.getId() + "\",\"title\":\"" + asset.getTitle() +
-                        "\",\"category\":\"" + asset.getCategory() + "\",\"sharePercentage\":" + alloc.getSharePercentage() +
-                        ",\"instructions\":\"" + (alloc.getInstructions() != null ? alloc.getInstructions() : "") + "\"}";
-                assetSummaries.add(summary);
+                assetSummaries.add(java.util.Map.of("assetId", asset.getId(), "title", asset.getTitle(),
+                        "category", asset.getCategory(), "sharePercentage", alloc.getSharePercentage(),
+                        "instructions", alloc.getInstructions() == null ? "" : alloc.getInstructions()));
             });
         }
 
-        String payloadJson = "{\"beneficiaryId\":\"" + beneficiary.getId() + "\",\"name\":\"" + beneficiary.getName() +
-                "\",\"disclosedAt\":\"" + now + "\",\"allocations\":[" + String.join(",", assetSummaries) + "]}";
+        String payloadJson = JSON.writeValueAsString(java.util.Map.of(
+                "beneficiaryId", beneficiary.getId(), "name", beneficiary.getName(),
+                "disclosedAt", now.toString(), "allocations", assetSummaries));
 
         // Generate cryptographically secure disclosure token
         String rawToken = tokenService.generateRawToken();

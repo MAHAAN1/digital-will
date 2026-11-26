@@ -40,8 +40,10 @@ export interface User {
 }
 
 export interface AuthResponse {
-  token: string;
-  user: User;
+  userId: string;
+  email: string;
+  fullName: string;
+  willId: string | null;
 }
 
 export interface WillResponse {

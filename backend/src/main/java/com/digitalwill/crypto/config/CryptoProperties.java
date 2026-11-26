@@ -12,9 +12,9 @@ public class CryptoProperties {
 
     /**
      * Base64-encoded 256-bit (32 bytes) master key used for envelope encryption key wrapping.
-     * Default provided for local test/dev; in production must be injected via environment or secret manager.
+     * The server requires an explicit key supplied by the operator.
      */
-    private String masterKey = "k8vS4w1bY8Z3tqX9LmP0rTuVwXyZ1234567890ABCDE=";
+    private String masterKey;
 
     /**
      * Local storage path for encrypted document payloads.

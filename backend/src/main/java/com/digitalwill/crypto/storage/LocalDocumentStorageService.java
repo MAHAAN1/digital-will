@@ -26,11 +26,11 @@ public class LocalDocumentStorageService implements DocumentStorageService {
     public LocalDocumentStorageService(CryptoProperties cryptoProperties) {
         Objects.requireNonNull(cryptoProperties, "cryptoProperties must not be null");
         this.rootStorageDir = cryptoProperties.getResolvedStoragePath();
-        try {
-            Files.createDirectories(this.rootStorageDir);
-        } catch (IOException e) {
-            throw new CryptoException("Failed to initialize document storage directory: " + rootStorageDir, e);
-        }
+    }
+
+    @Override
+    public String referenceFor(UUID willId, UUID documentId) {
+        return willId + "/" + documentId + ".enc";
     }
 
     @Override
@@ -52,7 +52,7 @@ public class LocalDocumentStorageService implements DocumentStorageService {
             log.debug("Stored encrypted document [{}] at [{}]", documentId, filePath);
 
             // Relative storage reference
-            return willId + "/" + fileName;
+            return referenceFor(willId, documentId);
         } catch (IOException e) {
             log.error("Failed to store encrypted document [{}] for will [{}]: {}", documentId, willId, e.getMessage());
             throw new CryptoException("Failed to store encrypted document: " + e.getMessage(), e);

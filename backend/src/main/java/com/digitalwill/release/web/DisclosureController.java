@@ -16,6 +16,15 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/disclosure")
 public class DisclosureController {
+    private static final tools.jackson.databind.ObjectMapper JSON = new tools.jackson.databind.ObjectMapper();
+
+    private boolean includesAttachment(String payload, UUID documentId) {
+        var marker = java.util.regex.Pattern.compile("(?i)\\bAttached document:\\s*" + documentId + "(?![a-zA-Z0-9-])");
+        for (var allocation : JSON.readTree(payload).path("allocations")) {
+            if (marker.matcher(allocation.path("instructions").asString("")).find()) return true;
+        }
+        return false;
+    }
 
     private final DisclosureService disclosureService;
     private final DocumentService documentService;
@@ -46,6 +55,7 @@ public class DisclosureController {
         return ResponseEntity.ok(DisclosureResponse.fromService(disclosure));
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @GetMapping("/{token}/document/{documentId}")
     public ResponseEntity<byte[]> downloadDisclosedDocument(
             @PathVariable String token,
@@ -57,7 +67,7 @@ public class DisclosureController {
                 .orElseThrow(() -> new com.digitalwill.document.exception.DocumentNotFoundException("Document does not belong to this estate package"));
 
         // Server-side authorization check: verify document is within beneficiary's disclosure scope
-        if (!disclosure.payloadJson().contains(documentId.toString())) {
+        if (!includesAttachment(disclosure.payloadJson(), documentId)) {
             throw new SecurityException("Unauthorized: document " + documentId + " is outside the disclosure scope for beneficiary " + disclosure.beneficiaryId());
         }
 

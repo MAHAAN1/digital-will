@@ -95,8 +95,11 @@ class DisclosureWorkflowIntegrationTest {
     private String rawTokenAlice;
     private String rawTokenBob;
 
+    @Autowired com.digitalwill.security.ratelimit.RateLimitService rateLimits;
+
     @BeforeEach
     void setUp() {
+        rateLimits.reset();
         timeProvider.setNow(baseTime);
 
         ownerId = UUID.randomUUID();

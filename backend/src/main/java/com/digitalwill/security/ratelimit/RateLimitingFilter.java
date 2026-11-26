@@ -38,7 +38,8 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String method = request.getMethod();
 
-        String clientIp = resolveClientIp(request);
+        // The trusted reverse proxy and servlet container resolve the peer address.
+        String clientIp = request.getRemoteAddr();
         RateLimitService.RateLimitDecision decision = null;
 
         if ("POST".equalsIgnoreCase(method) && "/api/auth/login".equals(path)) {
@@ -70,12 +71,4 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String resolveClientIp(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            String[] parts = xForwardedFor.split(",");
-            return parts[0].trim();
-        }
-        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "127.0.0.1";
-    }
 }

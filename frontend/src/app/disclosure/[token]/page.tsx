@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, use } from 'react';
 import { api } from '@/lib/api';
 import { BeneficiaryDisclosurePackage, UIState } from '@/lib/types';
 import { formatDate, mapErrorToUIState } from '@/lib/utils';
@@ -10,7 +10,7 @@ export default function DisclosurePage({ params }: { params: Promise<{ token: st
   const resolvedParams = use(params);
   const token = resolvedParams.token;
 
-  const [uiState, setUiState] = useState<UIState>('loading');
+  const [uiState, setUiState] = useState<UIState>('idle');
   const [disclosurePackage, setDisclosurePackage] = useState<BeneficiaryDisclosurePackage | null>(null);
   const [willId, setWillId] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -31,10 +31,6 @@ export default function DisclosurePage({ params }: { params: Promise<{ token: st
     }
   };
 
-  useEffect(() => {
-    fetchDisclosure();
-  }, [token]);
-
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'REAL_ESTATE':
@@ -52,7 +48,7 @@ export default function DisclosurePage({ params }: { params: Promise<{ token: st
       <div>
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 text-xs font-medium mb-3">
           <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Controlled Estate Disclosure • Verified Beneficiary</span>
+          <span>Beneficiary disclosure</span>
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
           Estate Succession Disclosure Package
@@ -62,6 +58,14 @@ export default function DisclosurePage({ params }: { params: Promise<{ token: st
         </p>
       </div>
 
+      {uiState === 'idle' && (
+        <div className="space-y-3">
+          <p className="text-sm text-zinc-300">This link opens once. Open the package when you are ready to read it.</p>
+          <button type="button" onClick={fetchDisclosure} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white">
+            Open my disclosure
+          </button>
+        </div>
+      )}
       {/* Loading state */}
       {uiState === 'loading' && (
         <div className="p-12 text-center text-zinc-500 text-sm flex items-center justify-center gap-2">

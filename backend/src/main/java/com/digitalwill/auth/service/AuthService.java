@@ -19,7 +19,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
+import com.digitalwill.auth.security.SessionCredentials;
+import com.digitalwill.state.service.WillStateService;
+import java.util.Locale;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,7 +31,7 @@ import java.util.UUID;
 public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
-    private static final Duration AUTH_TOKEN_TTL = Duration.ofDays(30);
+    private final WillStateService willStateService;
 
     private final UserRepository userRepository;
     private final UserAuthTokenRepository tokenRepository;
@@ -45,7 +47,8 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        VerificationTokenService tokenService,
                        AuditLogService auditLogService,
-                       TimeProvider timeProvider) {
+                       TimeProvider timeProvider, WillStateService willStateService) {
+        this.willStateService = Objects.requireNonNull(willStateService);
         this.userRepository = Objects.requireNonNull(userRepository);
         this.tokenRepository = Objects.requireNonNull(tokenRepository);
         this.willStateRepository = Objects.requireNonNull(willStateRepository);
@@ -83,7 +86,7 @@ public class AuthService {
             throw new IllegalArgumentException("Full name must not be blank");
         }
 
-        String normalizedEmail = email.trim().toLowerCase();
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new IllegalArgumentException("Email is already registered");
         }
@@ -98,7 +101,7 @@ public class AuthService {
         // Generate session token
         String rawToken = tokenService.generateRawToken();
         String tokenHash = tokenService.hashToken(rawToken);
-        UserAuthToken authToken = new UserAuthToken(UUID.randomUUID(), userId, tokenHash, now, now.plus(AUTH_TOKEN_TTL));
+        UserAuthToken authToken = new UserAuthToken(UUID.randomUUID(), userId, tokenHash, now, now.plus(SessionCredentials.LIFETIME));
         tokenRepository.save(authToken);
 
         auditLogService.logCritical(
@@ -122,7 +125,7 @@ public class AuthService {
             throw new IllegalArgumentException("Email and password must not be blank");
         }
 
-        String normalizedEmail = email.trim().toLowerCase();
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new SecurityException("Invalid email or password"));
 
@@ -131,28 +134,15 @@ public class AuthService {
         }
 
         Instant now = timeProvider.now();
+        UUID willId = willStateRepository.findIdsByOwnerId(user.getId()).stream().findFirst().orElse(null);
+        if (willId != null) {
+            willStateService.recordVerifiedActivity(willId, now);
+        }
+
         String rawToken = tokenService.generateRawToken();
         String tokenHash = tokenService.hashToken(rawToken);
-        UserAuthToken authToken = new UserAuthToken(UUID.randomUUID(), user.getId(), tokenHash, now, now.plus(AUTH_TOKEN_TTL));
+        UserAuthToken authToken = new UserAuthToken(UUID.randomUUID(), user.getId(), tokenHash, now, now.plus(SessionCredentials.LIFETIME));
         tokenRepository.save(authToken);
-
-        // Check if user already owns a Will
-        Optional<WillStateEntity> willOpt = willStateRepository.findByOwnerId(user.getId()).stream().findFirst();
-        UUID willId = willOpt.map(WillStateEntity::getId).orElse(null);
-
-        // If user owns a Will, record verified owner activity on login (Section 14)
-        if (willId != null) {
-            try {
-                // Update activity on successful authenticated login
-                willOpt.ifPresent(w -> {
-                    w.setLastVerifiedActivityAt(now);
-                    w.setUpdatedAt(now);
-                    willStateRepository.save(w);
-                });
-            } catch (Exception e) {
-                log.warn("Failed to update activity on login for will {}: {}", willId, e.getMessage());
-            }
-        }
 
         auditLogService.logCritical(
                 willId,
@@ -183,7 +173,7 @@ public class AuthService {
 
         UserAuthToken token = tokenOpt.get();
         Instant now = timeProvider.now();
-        if (now.isAfter(token.getExpiresAt())) {
+        if (!now.isBefore(token.getExpiresAt())) {
             tokenRepository.delete(token);
             return Optional.empty();
         }

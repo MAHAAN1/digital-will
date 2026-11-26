@@ -260,14 +260,14 @@ public class WillStateService {
      */
     @Transactional
     public boolean recordVerifiedActivity(UUID willId, Instant activityTimestamp) {
-        WillStateEntity will = getWillOrThrow(willId);
+        WillStateEntity will = willStateRepository.findByIdForUpdate(willId)
+                .orElseThrow(() -> new IllegalArgumentException("Will not found: " + willId));
         Instant now = timeProvider.now();
 
         if (will.getState() == WillState.ACTIVE) {
             will.setLastVerifiedActivityAt(activityTimestamp);
             will.setUpdatedAt(now);
-            willStateRepository.save(will);
-            clearCache();
+            willStateRepository.saveAndFlush(will);
             log.info("Updated lastVerifiedActivityAt for ACTIVE Will [{}]", willId);
             return true;
         }

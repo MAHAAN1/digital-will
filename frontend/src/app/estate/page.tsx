@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { api, getAuthToken } from '@/lib/api';
+import { api } from '@/lib/api';
 import {
   Asset,
   AssetAllocation,
@@ -25,8 +25,6 @@ import {
   Plus,
   UserCheck,
   Ban,
-  CalendarClock,
-  Play,
   FileCheck2,
   Trash2,
   Lock,
@@ -36,7 +34,6 @@ import {
   FileText,
   AlertTriangle,
   ArrowRight,
-  ShieldAlert,
 } from 'lucide-react';
 
 const STATE_ORDER: SuccessionState[] = [
@@ -61,7 +58,6 @@ const ASSET_CATEGORIES: { label: string; value: AssetCategory }[] = [
 ];
 
 export default function EstatePage() {
-  const [token, setToken] = useState<string | null>(null);
   const [will, setWill] = useState<WillResponse | null>(null);
   const [review, setReview] = useState<WillReview | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -72,13 +68,12 @@ export default function EstatePage() {
   const [auditVerify, setAuditVerify] = useState<AuditVerificationResult | null>(null);
 
   const [activeTab, setActiveTab] = useState<'review' | 'assets' | 'beneficiaries' | 'allocations' | 'contacts' | 'audit'>('review');
-  const [uiState, setUiState] = useState<UIState>('idle');
+  const [uiState, setUiState] = useState<UIState>('loading');
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Modal / Form States
-  const [showCreateWill, setShowCreateWill] = useState(false);
   const [newWillTitle, setNewWillTitle] = useState('');
 
   const [showAddAsset, setShowAddAsset] = useState(false);
@@ -122,35 +117,26 @@ export default function EstatePage() {
     }
   }, []);
 
-  const loadInitial = useCallback(async () => {
-    const storedToken = getAuthToken();
-    setToken(storedToken);
-
-    if (!storedToken) {
-      setUiState('unauthorized');
-      return;
-    }
-
-    setUiState('loading');
-    setErrorMessage(null);
-
-    try {
-      const myWill = await api.getMyWill();
+  const loadInitial = useCallback((active: () => boolean = () => true) =>
+    api.getMyWill().then(async myWill => {
+      if (!active()) return;
       if (!myWill) {
         setWill(null);
         setUiState('not_found');
         return;
       }
       await loadWillData(myWill.id);
-    } catch (err) {
+    }).catch(err => {
+      if (!active()) return;
       const { state, message } = mapErrorToUIState(err);
       setUiState(state);
       setErrorMessage(message);
-    }
-  }, [loadWillData]);
+    }), [loadWillData]);
 
   useEffect(() => {
-    loadInitial();
+    let active = true;
+    void loadInitial(() => active);
+    return () => { active = false; };
   }, [loadInitial]);
 
   const handleCreateWill = async (e: React.FormEvent) => {
@@ -160,7 +146,6 @@ export default function EstatePage() {
     setErrorMessage(null);
     try {
       const created = await api.createWill(newWillTitle.trim());
-      setShowCreateWill(false);
       setNewWillTitle('');
       await loadWillData(created.id);
       setSuccessMessage('Digital Will created successfully!');
@@ -438,7 +423,7 @@ export default function EstatePage() {
           <p className="text-sm text-zinc-400">{errorMessage || 'Failed to communicate with the estate server.'}</p>
         </div>
         <button
-          onClick={() => loadInitial()}
+          onClick={() => { setUiState('loading'); setErrorMessage(null); void loadInitial(); }}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-colors"
         >
           <RotateCcw className="w-4 h-4" />

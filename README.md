@@ -24,13 +24,13 @@ Digital Will is architected as a modular monolith:
 
 ### Backend
 - **Language / Runtime:** Java 21
-- **Framework:** Spring Boot 3.3.4 (Spring Web, Spring Security, Spring Data JPA)
+- **Framework:** Spring Boot 4.1.3 (Spring Web, Spring Security, Spring Data JPA)
 - **Database:** PostgreSQL (with Flyway database migrations)
 - **Testing:** JUnit 5, Mockito, Spring Boot Test, H2 in-memory test database
 - **Cryptography:** Java Cryptography Extension (AES-256-GCM envelope encryption, SHA-256 hashing)
 
 ### Frontend
-- **Framework:** Next.js 15 (App Router, React 19)
+- **Framework:** Next.js 16 (App Router, React 19)
 - **Language:** TypeScript
 - **Styling & Components:** Tailwind CSS, Lucide icons, clsx, tailwind-merge
 - **State & Data Fetching:** Native React hooks and fetch API with strict error boundaries
@@ -69,7 +69,7 @@ ACTIVE -> INACTIVITY_WARNING -> FINAL_WARNING -> VERIFICATION_PENDING -> VERIFIE
 ### 3.5 Protected Background Job Processing & Orchestration
 - Scheduled processing endpoints (`/internal/jobs/**`) trigger state machine evaluations, recovery, and release disbursements.
 - Endpoints are protected by a shared secret (`X-Internal-Job-Secret`) verified using constant-time comparison to prevent timing attacks.
-- External orchestration is automated via GitHub Actions (`.github/workflows/scheduled-jobs.yml`), which executes on a 15-minute schedule or on-demand dispatch with strict secret and environment validation.
+- External orchestration is automated via GitHub Actions (`.github/workflows/scheduled-jobs.yml`), which executes on a twice-daily schedule or on-demand dispatch with strict secret and environment validation.
 
 ### 3.6 Transaction-Aware Notification Delivery
 - Notification delivery (`NotificationDeliveryService`) supports automated email dispatch for trusted-contact verification and beneficiary disclosure.
@@ -169,20 +169,18 @@ Phase 4 subjected the platform to adversarial security verification against 26 a
 - Maven 3.9+ (or use the included `./mvnw` wrapper)
 - PostgreSQL 15+ (for live application startup; automated tests use in-memory H2)
 
-### Environment Configuration
-Copy `.env.example` to configure the backend and frontend environments:
-```bash
-cp .env.example .env
-```
-Key configuration items:
-- `MASTER_ENCRYPTION_KEY`: Base64-encoded 256-bit key for document envelope encryption.
-- `INTERNAL_JOB_SECRET`: Secret header required for internal scheduled jobs (`X-Internal-Job-Secret`).
-- `NOTIFICATION_ENABLED`: Enable email dispatch (`true`/`false`, default `false`).
-- `NOTIFICATION_PROVIDER`: Notification provider (`DISABLED`, `CONSOLE`, or `RESEND`).
-- `RESEND_API_KEY`: API key if using Resend email provider.
+### Deployment and local configuration
+
+The Vercel project root is the repository root. Its Next.js frontend and Java container share a domain. The API stores new encrypted documents in PostgreSQL together with their metadata and audit events. Existing filesystem uploads require the original storage directory and original master key.
+
+Provision a dedicated PostgreSQL database per environment. Set `DB_URL` to a JDBC PostgreSQL URL and configure `DB_USERNAME`, `DB_PASSWORD`, `APP_CRYPTO_MASTER_KEY` (Base64 of 32 random bytes) and `APP_JOBS_SECRET` (at least 32 characters). Generate independent secrets and keep an offline backup of the master key. Use TLS verification for hosted database connections. Set `APP_CORS_ALLOWED_ORIGINS` and `APP_FRONTEND_URL` to the exact public HTTPS origin. Set the Vercel backend port to 8080. For separate frontend hosting, set `BACKEND_ORIGIN` to the HTTPS Spring origin at build time.
+
+Browser sessions use a Secure, HttpOnly cookie. Existing browser users sign in once after upgrading. Native clients can continue using bearer tokens. Configure the scheduler's `APP_BASE_URL` and `INTERNAL_JOB_SECRET` to match the API URL and its job secret. Email stays disabled until a verified sender, `NOTIFICATIONS_API_KEY`, `NOTIFICATIONS_FROM_EMAIL`, `NOTIFICATIONS_PROVIDER=RESEND`, and `NOTIFICATIONS_ENABLED=true` are configured. Provider acceptance and inbox delivery are distinct.
+
+For local use, export the variables in `.env.example` in the server process and run PostgreSQL before starting Spring. The frontend development server proxies to loopback by default.
 
 ### Running Backend Tests
-All 209 tests execute in-memory using H2 with Flyway PostgreSQL compatibility:
+The backend tests execute in-memory using H2 with Flyway PostgreSQL compatibility:
 ```bash
 cd backend
 ./mvnw clean test
@@ -198,7 +196,7 @@ cd backend
 ### Running the Frontend
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 

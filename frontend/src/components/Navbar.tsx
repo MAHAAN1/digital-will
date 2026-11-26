@@ -2,38 +2,40 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { api, clearAuthToken, getAuthToken } from '@/lib/api';
+import { usePathname, useRouter } from 'next/navigation';
+import { api, ApiException } from '@/lib/api';
 import { User } from '@/lib/types';
-import { Shield, UserCircle, LogOut } from 'lucide-react';
+import { UserCircle, LogOut } from 'lucide-react';
 
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
-      setUser(null);
-      setLoading(false);
-      return;
-    }
+  const [logoutError, setLogoutError] = useState(false);
 
-    api
-      .getMe()
-      .then((data) => setUser(data))
-      .catch(() => {
-        clearAuthToken();
-        setUser(null);
+  useEffect(() => {
+    // Retire the credential kept by older browser builds.
+    try { localStorage.removeItem('digital_will_auth_token'); } catch { /* Storage can be disabled. */ }
+    let active = true;
+    api.getSession()
+      .then(profile => { if (active) setUser(profile); })
+      .catch(error => {
+        if (active && error instanceof ApiException && error.status === 401) setUser(null);
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [pathname]);
 
   const handleLogout = async () => {
-    await api.logout();
-    setUser(null);
-    window.location.href = '/auth';
+    try {
+      await api.logout();
+      setUser(null);
+      router.replace('/auth');
+    } catch {
+      setLogoutError(true);
+    }
   };
 
   return (
@@ -80,6 +82,7 @@ export function Navbar() {
                     <UserCircle className="w-4 h-4 text-emerald-400" />
                     <span>{user.fullName || user.email}</span>
                   </div>
+                  {logoutError && <span role="alert">Sign-out failed. Try again.</span>}
                   <button
                     onClick={handleLogout}
                     title="Log out"

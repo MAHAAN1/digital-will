@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { UIState, VerificationConfirmationResult } from '@/lib/types';
@@ -9,17 +9,11 @@ import { KeyRound, CheckCircle2, AlertTriangle, XCircle, RotateCcw, Clock, Shiel
 
 function VerifyContent() {
   const searchParams = useSearchParams();
-  const [token, setToken] = useState('');
+  const [editedToken, setToken] = useState<string | null>(null);
+  const token = editedToken ?? searchParams.get('token') ?? '';
   const [uiState, setUiState] = useState<UIState>('idle');
   const [result, setResult] = useState<VerificationConfirmationResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    const queryToken = searchParams.get('token');
-    if (queryToken) {
-      setToken(queryToken);
-    }
-  }, [searchParams]);
 
   const handleConfirm = async (overrideToken?: string) => {
     const tokenToSubmit = (overrideToken || token).trim();
