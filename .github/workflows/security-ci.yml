@@ -40,10 +40,10 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -53,4 +53,10 @@ jobs:
 
       - name: Run Production Next.js Build
         working-directory: frontend
-        run: npm run build
+        env:
+          BACKEND_ORIGIN: http://127.0.0.1:8080
+        run: |
+          npm run lint
+          npm audit
+          npm run build
+          npm run typecheck

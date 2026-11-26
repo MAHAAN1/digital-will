@@ -8,6 +8,8 @@ import java.util.UUID;
  */
 public interface DocumentStorageService {
 
+    String referenceFor(UUID willId, UUID documentId);
+
     /**
      * Stores encrypted payload for the specified will and document ID.
      *

@@ -12,7 +12,12 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 public class NotificationDeliveryServiceTest {
 
@@ -66,8 +71,8 @@ public class NotificationDeliveryServiceTest {
     }
 
     @Test
-    @DisplayName("WS3: Console provider returns delivered without crashing")
-    void consoleProvider_returnsDelivered() {
+    @DisplayName("WS3: Console provider records a preview")
+    void consoleProvider_returnsPreviewed() {
         NotificationProperties props = new NotificationProperties();
         props.setEnabled(true);
         props.setProvider("CONSOLE");
@@ -77,8 +82,8 @@ public class NotificationDeliveryServiceTest {
                 "beneficiary@example.com", "Bob Beneficiary", UUID.randomUUID(), "b***y@example.com", "https://app/disclosure/tok"
         );
 
-        assertThat(result.delivered()).isTrue();
-        assertThat(result.status()).isEqualTo("DELIVERED");
+        assertThat(result.delivered()).isFalse();
+        assertThat(result.status()).isEqualTo("PREVIEWED");
     }
 
     @Test
@@ -111,4 +116,22 @@ public class NotificationDeliveryServiceTest {
         NotificationDeliveryResult res2 = service.sendDisclosureNotification("email@example.com", "Name", UUID.randomUUID(), " ");
         assertThat(res2.delivered()).isFalse();
     }
+    @Test
+    void acceptsReceiptFromProvider() {
+        var props = new NotificationProperties();
+        props.setEnabled(true);
+        props.setProvider("RESEND");
+        props.setApiKey("test-fixture");
+        var builder = RestClient.builder().baseUrl("https://api.resend.com");
+        var server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("https://api.resend.com/emails"))
+                .andExpect(header("Authorization", "Bearer test-fixture"))
+                .andRespond(withSuccess("{\"id\":\"fixture-receipt\"}", MediaType.APPLICATION_JSON));
+        var service = new NotificationDeliveryService(props, builder.build());
+        var receipt = service.doSendDisclosureEmail("guest@example.com", "Guest", UUID.randomUUID(),
+                "g***t@example.com", "https://demo.example.com/disclosure/fixture");
+        assertThat(receipt.status()).isEqualTo("ACCEPTED_BY_PROVIDER");
+        server.verify();
+    }
+
 }

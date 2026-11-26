@@ -2,17 +2,23 @@ package com.digitalwill.job.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.validation.annotation.Validated;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import java.time.Duration;
 
 @Configuration
+@Validated
 @ConfigurationProperties(prefix = "digitalwill.jobs")
 public class JobProperties {
 
     /**
      * Shared secret required in X-Internal-Job-Secret header for protected job endpoints.
      */
-    private String secret = "digitalwill-internal-secret-token";
+    @NotBlank
+    @Size(min = 32)
+    private String secret;
 
     /**
      * Duration of owner inactivity before triggering first warning (default: 90 days).

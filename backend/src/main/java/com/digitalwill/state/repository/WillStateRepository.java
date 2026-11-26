@@ -21,6 +21,9 @@ public interface WillStateRepository extends JpaRepository<WillStateEntity, UUID
 
     List<WillStateEntity> findByOwnerId(UUID ownerId);
 
+    @Query("SELECT w.id FROM WillStateEntity w WHERE w.ownerId = :ownerId ORDER BY w.createdAt, w.id")
+    List<UUID> findIdsByOwnerId(@Param("ownerId") UUID ownerId);
+
     Optional<WillStateEntity> findByIdAndOwnerId(UUID id, UUID ownerId);
 
     List<WillStateEntity> findByStateAndReleaseAfterLessThanEqual(WillState state, Instant cutoff);
